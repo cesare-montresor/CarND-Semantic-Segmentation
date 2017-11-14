@@ -59,49 +59,41 @@ def layers(vgg_layer3_out, vgg_layer4_out, vgg_layer7_out, num_classes):
 
     reg_scale = 1e-3
     k_reg = tf.contrib.layers.l2_regularizer
-    init_stddev = 0.01
-    k_init = tf.truncated_normal_initializer
 
     # vgg layer aggregation to matching channel size
     vgg_3 = tf.layers.conv2d(
         vgg_layer3_out, num_classes, 1, padding="same",
-        kernel_regularizer=k_reg(reg_scale),
-        kernel_initializer=k_init(init_stddev)
+        kernel_regularizer=tf.contrib.layers.l2_regularizer(reg_scale)
     )
 
     vgg_4 = tf.layers.conv2d(
         vgg_layer4_out, num_classes, 1, padding="same",
-        kernel_regularizer = k_reg(reg_scale),
-        kernel_initializer = k_init(init_stddev)
+        kernel_regularizer = tf.contrib.layers.l2_regularizer(reg_scale)
     )
 
     vgg_7 = tf.layers.conv2d(
         vgg_layer7_out, num_classes, 1, padding="same",
-        kernel_regularizer=k_reg(reg_scale),
-        kernel_initializer=k_init(init_stddev)
+        kernel_regularizer=tf.contrib.layers.l2_regularizer(reg_scale)
     )
 
     # decoder composition
     with tf.name_scope('summaries'):
         dec_1_x2 = tf.layers.conv2d_transpose(
             vgg_7, num_classes, 4, 2, padding="same",
-            kernel_regularizer=k_reg(reg_scale),
-            kernel_initializer=k_init(init_stddev)
+            kernel_regularizer=tf.contrib.layers.l2_regularizer(reg_scale)
         )
         dec_2_sk = tf.add(dec_1_x2, vgg_4)
 
         dec_3_x4 = tf.layers.conv2d_transpose(
             dec_2_sk, num_classes, 4, 2, padding="same",
-            kernel_regularizer=k_reg(reg_scale),
-            kernel_initializer=k_init(init_stddev)
+            kernel_regularizer=tf.contrib.layers.l2_regularizer(reg_scale)
         )
         dec_4_sk = tf.add(dec_3_x4, vgg_3)
 
 
         dec_5_x4 = tf.layers.conv2d_transpose(
             dec_4_sk, num_classes, 16, 8, padding="same",
-            kernel_regularizer=k_reg(reg_scale),
-            kernel_initializer=k_init(init_stddev)
+            kernel_regularizer=tf.contrib.layers.l2_regularizer(reg_scale)
         )
 
         tf.summary.histogram('output layer', dec_5_x4)
@@ -125,8 +117,8 @@ def optimize(nn_last_layer, correct_label, learning_rate, num_classes):
 
     #define loss and training operations
     cross_entropy_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=logits, labels=correct_label))
-    optimizer = tf.train.GradientDescentOptimizer(learning_rate).minimize(cross_entropy_loss)
-    #optimizer = tf.train.AdamOptimizer(learning_rate).minimize(cross_entropy_loss)
+    #optimizer = tf.train.GradientDescentOptimizer(learning_rate).minimize(cross_entropy_loss)
+    optimizer = tf.train.AdamOptimizer(learning_rate).minimize(cross_entropy_loss)
 
     return logits, optimizer, cross_entropy_loss
 tests.test_optimize(optimize)
@@ -161,7 +153,6 @@ def train_nn(sess, epochs, batch_size, get_batches_fn, train_op, cross_entropy_l
         cnt = 0
         for image, label in get_batches_fn(batch_size):
             cnt += len(image)
-            print("Batch", cnt)
             operations = [
                 train_op,
                 cross_entropy_loss
@@ -174,20 +165,20 @@ def train_nn(sess, epochs, batch_size, get_batches_fn, train_op, cross_entropy_l
                 keep_prob: kp
             }
             train_result,loss = sess.run(operations, params)
-            print( loss )
+            print("Batch:", cnt,"\t", loss)
             epoch_loss += loss
 
         avg_cost = epoch_loss/cnt
-        print("Loss:", avg_cost)
+        print("AVG Loss:", avg_cost)
 
 
 tests.test_train_nn(train_nn)
 
 
 def run():
-    epochs = 3
+    epochs = 30
     num_classes = 2
-    batch_size = 32
+    batch_size = 15 # max size for to avoid OOM warning
     image_shape = (160, 576)
     pix_cnt = image_shape[0] * image_shape[1]
     data_dir = './data'
