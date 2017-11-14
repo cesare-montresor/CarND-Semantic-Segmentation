@@ -157,7 +157,7 @@ def train_nn(sess, epochs, batch_size, get_batches_fn, train_op, cross_entropy_l
     # TODO: Implement function
     for epoch in range(epochs):
         print("Epoch:", epoch)
-        epoch_loss = .0
+        epoch_loss = 0.0
         cnt = 0
         for image, label in get_batches_fn(batch_size):
             cnt += len(image)
