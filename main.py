@@ -63,40 +63,38 @@ def layers(vgg_layer3_out, vgg_layer4_out, vgg_layer7_out, num_classes):
     # vgg layer aggregation to matching channel size
     vgg_3 = tf.layers.conv2d(
         vgg_layer3_out, num_classes, 1, padding="same",
-        kernel_regularizer=tf.contrib.layers.l2_regularizer(reg_scale)
+        kernel_regularizer=k_reg(reg_scale)
     )
 
     vgg_4 = tf.layers.conv2d(
         vgg_layer4_out, num_classes, 1, padding="same",
-        kernel_regularizer = tf.contrib.layers.l2_regularizer(reg_scale)
+        kernel_regularizer = k_reg(reg_scale)
     )
 
     vgg_7 = tf.layers.conv2d(
         vgg_layer7_out, num_classes, 1, padding="same",
-        kernel_regularizer=tf.contrib.layers.l2_regularizer(reg_scale)
+        kernel_regularizer=k_reg(reg_scale)
     )
 
     # decoder composition
-    with tf.name_scope('summaries'):
-        dec_1_x2 = tf.layers.conv2d_transpose(
-            vgg_7, num_classes, 4, 2, padding="same",
-            kernel_regularizer=tf.contrib.layers.l2_regularizer(reg_scale)
-        )
-        dec_2_sk = tf.add(dec_1_x2, vgg_4)
+    dec_1_x2 = tf.layers.conv2d_transpose(
+        vgg_7, num_classes, 4, 2, padding="same",
+        kernel_regularizer=k_reg(reg_scale)
+    )
+    dec_2_sk = tf.add(dec_1_x2, vgg_4)
 
-        dec_3_x4 = tf.layers.conv2d_transpose(
-            dec_2_sk, num_classes, 4, 2, padding="same",
-            kernel_regularizer=tf.contrib.layers.l2_regularizer(reg_scale)
-        )
-        dec_4_sk = tf.add(dec_3_x4, vgg_3)
+    dec_3_x4 = tf.layers.conv2d_transpose(
+        dec_2_sk, num_classes, 4, 2, padding="same",
+        kernel_regularizer=k_reg(reg_scale)
+    )
+    dec_4_sk = tf.add(dec_3_x4, vgg_3)
 
 
-        dec_5_x4 = tf.layers.conv2d_transpose(
-            dec_4_sk, num_classes, 16, 8, padding="same",
-            kernel_regularizer=tf.contrib.layers.l2_regularizer(reg_scale)
-        )
+    dec_5_x4 = tf.layers.conv2d_transpose(
+        dec_4_sk, num_classes, 16, 8, padding="same",
+        kernel_regularizer=k_reg(reg_scale)
+    )
 
-        tf.summary.histogram('output layer', dec_5_x4)
 
     return dec_5_x4
 tests.test_layers(layers)
@@ -165,7 +163,7 @@ def train_nn(sess, epochs, batch_size, get_batches_fn, train_op, cross_entropy_l
                 keep_prob: kp
             }
             train_result,loss = sess.run(operations, params)
-            print("Batch:", cnt,"\t", loss)
+            #print("Batch:", cnt,"\t", loss)
             epoch_loss += loss
 
         avg_cost = epoch_loss/cnt
@@ -176,11 +174,12 @@ tests.test_train_nn(train_nn)
 
 
 def run():
-    epochs = 30
+    epochs = 200
     num_classes = 2
-    batch_size = 15 # max size for to avoid OOM warning
+    # max size for to avoid OOM warning
+    # W tensorflow/core/common_runtime/bfc_allocator.cc:217] Allocator (GPU_0_bfc) ran out of memory trying to allocate 3.16GiB. The caller indicates that this is not a failure, but may mean that there could be performance gains if more memory is available.
+    batch_size = 15
     image_shape = (160, 576)
-    pix_cnt = image_shape[0] * image_shape[1]
     data_dir = './data'
     runs_dir = './runs'
     tests.test_for_kitti_dataset(data_dir)
@@ -194,8 +193,6 @@ def run():
     #  https://www.cityscapes-dataset.com/
 
     with tf.Session() as sess:
-
-        writer = tf.summary.FileWriter('logs', sess.graph)
         # Path to vgg model
         vgg_path = os.path.join(data_dir, 'vgg')
         # Create function to get batches
@@ -222,7 +219,6 @@ def run():
         print("Save")
         # TODO: Save inference data using helper.save_inference_samples
         helper.save_inference_samples(runs_dir, data_dir, sess, image_shape, logits, keep_prob, input_image)
-        writer.close()
 
         # OPTIONAL: Apply the trained model to a video
 
