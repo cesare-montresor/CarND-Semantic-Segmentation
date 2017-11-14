@@ -174,6 +174,7 @@ def train_nn(sess, epochs, batch_size, get_batches_fn, train_op, cross_entropy_l
                 keep_prob: kp
             }
             train_result,loss = sess.run(operations, params)
+            print(train_result,loss )
             epoch_loss += loss
 
         avg_cost = epoch_loss/cnt
