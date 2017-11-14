@@ -147,17 +147,21 @@ def train_nn(sess, epochs, batch_size, get_batches_fn, train_op, cross_entropy_l
     :param keep_prob: TF Placeholder for dropout keep probability
     :param learning_rate: TF Placeholder for learning rate
     """
+
+    print("init vars")
     sess.run(tf.global_variables_initializer())
     # sess.run(tf.local_variables_initializer())
 
     lr = 0.0001
-    kp = 1
+    kp = 0.5
     # TODO: Implement function
     for epoch in range(epochs):
+        print("Epoch:", epoch)
         epoch_loss = .0
         cnt = 0
         for image, label in get_batches_fn(batch_size):
             cnt += len(image)
+            print("Batch", cnt)
             operations = [
                 train_op,
                 cross_entropy_loss
@@ -182,7 +186,7 @@ tests.test_train_nn(train_nn)
 def run():
     epochs = 3
     num_classes = 2
-    batch_size = 1
+    batch_size = 32
     image_shape = (160, 576)
     pix_cnt = image_shape[0] * image_shape[1]
     data_dir = './data'
