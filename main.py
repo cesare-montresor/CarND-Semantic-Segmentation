@@ -61,40 +61,21 @@ def layers(vgg_layer3_out, vgg_layer4_out, vgg_layer7_out, num_classes):
     k_reg = tf.contrib.layers.l2_regularizer
 
     # vgg layer aggregation to matching channel size
-    vgg_3 = tf.layers.conv2d(
-        vgg_layer3_out, num_classes, 1, padding="same",
-        kernel_regularizer=k_reg(reg_scale)
-    )
-
-    vgg_4 = tf.layers.conv2d(
-        vgg_layer4_out, num_classes, 1, padding="same",
-        kernel_regularizer = k_reg(reg_scale)
-    )
-
-    vgg_7 = tf.layers.conv2d(
-        vgg_layer7_out, num_classes, 1, padding="same",
-        kernel_regularizer=k_reg(reg_scale)
-    )
+    vgg_3 = tf.layers.conv2d(vgg_layer3_out, num_classes, 1, padding="same",kernel_regularizer=k_reg(reg_scale))
+    vgg_4 = tf.layers.conv2d(vgg_layer4_out, num_classes, 1, padding="same",kernel_regularizer=k_reg(reg_scale))
+    vgg_7 = tf.layers.conv2d(vgg_layer7_out, num_classes, 1, padding="same",kernel_regularizer=k_reg(reg_scale))
 
     # decoder composition
-    dec_1_x2 = tf.layers.conv2d_transpose(
-        vgg_7, num_classes, 4, 2, padding="same",
-        kernel_regularizer=k_reg(reg_scale)
-    )
+    # upscale x2 the last layer convolutional layer of VGG and add layer VGG4
+    dec_1_x2 = tf.layers.conv2d_transpose(vgg_7, num_classes, 4, 2,  padding="same",kernel_regularizer=k_reg(reg_scale))
     dec_2_sk = tf.add(dec_1_x2, vgg_4)
 
-    dec_3_x4 = tf.layers.conv2d_transpose(
-        dec_2_sk, num_classes, 4, 2, padding="same",
-        kernel_regularizer=k_reg(reg_scale)
-    )
+    # upscale x2 the layer above and add layer VGG3
+    dec_3_x4 = tf.layers.conv2d_transpose(dec_2_sk, num_classes, 4,2,padding="same",kernel_regularizer=k_reg(reg_scale))
     dec_4_sk = tf.add(dec_3_x4, vgg_3)
 
-
-    dec_5_x4 = tf.layers.conv2d_transpose(
-        dec_4_sk, num_classes, 16, 8, padding="same",
-        kernel_regularizer=k_reg(reg_scale)
-    )
-
+    # upscale x4 the layer above
+    dec_5_x4 = tf.layers.conv2d_transpose(dec_4_sk, num_classes,16,8,padding="same",kernel_regularizer=k_reg(reg_scale))
 
     return dec_5_x4
 tests.test_layers(layers)
@@ -115,7 +96,6 @@ def optimize(nn_last_layer, correct_label, learning_rate, num_classes):
 
     #define loss and training operations
     cross_entropy_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=logits, labels=correct_label))
-    #optimizer = tf.train.GradientDescentOptimizer(learning_rate).minimize(cross_entropy_loss)
     optimizer = tf.train.AdamOptimizer(learning_rate).minimize(cross_entropy_loss)
 
     return logits, optimizer, cross_entropy_loss
@@ -140,7 +120,6 @@ def train_nn(sess, epochs, batch_size, get_batches_fn, train_op, cross_entropy_l
 
     print("init vars")
     sess.run(tf.global_variables_initializer())
-    # sess.run(tf.local_variables_initializer())
 
     lr = 0.001
     kp = 0.5

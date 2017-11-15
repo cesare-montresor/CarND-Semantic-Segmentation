@@ -1,42 +1,94 @@
 # Semantic Segmentation
 ### Introduction
 In this project, you'll label the pixels of a road in images using a Fully Convolutional Network (FCN).
+Due to hardware limitations the current implementation classify only the roads.
 
-### Setup
-##### Frameworks and Packages
-Make sure you have the following is installed:
- - [Python 3](https://www.python.org/)
- - [TensorFlow](https://www.tensorflow.org/)
- - [NumPy](http://www.numpy.org/)
- - [SciPy](https://www.scipy.org/)
-##### Dataset
-Download the [Kitti Road dataset](http://www.cvlibs.net/datasets/kitti/eval_road.php) from [here](http://www.cvlibs.net/download.php?file=data_road.zip).  Extract the dataset in the `data` folder.  This will create the folder `data_road` with all the training a test images.
+### Build the Neural Network
 
-### Start
-##### Implement
-Implement the code in the `main.py` module indicated by the "TODO" comments.
-The comments indicated with "OPTIONAL" tag are not required to complete.
-##### Run
-Run the following command to run the project:
+#### Model assembly  
+The projects extends and fine-tune a standard VGG, after loading (main.py:35), the model is converted to a 
+Fully Convolutional Network, by replacing FC layers used for classifications with a 1x1 convolution classifier using one filter 
+for each of the classes. This operation is also performed on the skipping layers (VGG3, VGG4) to obtain a compatible size.
+The resulting layer is upscaled 3 (x2,x2,x4) times to match the size of the original image, two skipping layers are added in the process 
+to reintegrate part of the information lost due to pooling and convolutions which facilitate the propagation of the gradient during training.
+
 ```
-python main.py
+# vgg layer aggregation to matching channel size
+vgg_3 = tf.layers.conv2d(vgg_layer3_out, num_classes, 1, padding="same",kernel_regularizer=k_reg(reg_scale))
+vgg_4 = tf.layers.conv2d(vgg_layer4_out, num_classes, 1, padding="same",kernel_regularizer=k_reg(reg_scale))
+vgg_7 = tf.layers.conv2d(vgg_layer7_out, num_classes, 1, padding="same",kernel_regularizer=k_reg(reg_scale))
+
+# decoder composition
+# upscale x2 the last layer convolutional layer of VGG and add layer VGG4
+dec_1_x2 = tf.layers.conv2d_transpose(vgg_7, num_classes, 4, 2,  padding="same",kernel_regularizer=k_reg(reg_scale))
+dec_2_sk = tf.add(dec_1_x2, vgg_4)
+
+# upscale x2 the layer above and add layer VGG3
+dec_3_x4 = tf.layers.conv2d_transpose(dec_2_sk, num_classes, 4,2,padding="same",kernel_regularizer=k_reg(reg_scale))
+dec_4_sk = tf.add(dec_3_x4, vgg_3)
+
+# upscale x4 the layer above
+dec_5_x4 = tf.layers.conv2d_transpose(dec_4_sk, num_classes,16,8,padding="same",kernel_regularizer=k_reg(reg_scale))
 ```
-**Note** If running this in Jupyter Notebook system messages, such as those regarding test status, may appear in the terminal rather than the notebook.
 
-### Submission
-1. Ensure you've passed all the unit tests.
-2. Ensure you pass all points on [the rubric](https://review.udacity.com/#!/rubrics/989/view).
-3. Submit the following in a zip file.
- - `helper.py`
- - `main.py`
- - `project_tests.py`
- - Newest inference images from `runs` folder  (**all images from the most recent run**)
- 
- ## How to write a README
-A well written README file can enhance your project and portfolio.  Develop your abilities to create professional README files by completing [this free course](https://www.udacity.com/course/writing-readmes--ud777).
+#### Operations
 
+The correct labels and the final layer are reshaped to compute the cross entropy which is then used my the the Adam optimizer as training operation.
 
-AVG Loss: 0.00131053352168
+```
+# reshape logits and label to fit softmax operation
+logits = tf.reshape(nn_last_layer, (-1, num_classes))
+correct_label = tf.reshape(correct_label, (-1, num_classes))
+
+#define loss and training operations
+cross_entropy_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=logits, labels=correct_label))
+optimizer = tf.train.AdamOptimizer(learning_rate).minimize(cross_entropy_loss)
+```
+
+#### Training
+
+The model is trained for 200 epochs. A batch size of 15, have been chosen at it is the maximum size that doesn't trigger a memory allocation warning.  
+For each batch the loss is accumulated and reported at the end of each epoch as average loss, for debugging purpose is possible to print the loss for each batch as it give a good intuition of the training.  
+
+```
+print("init vars")
+sess.run(tf.global_variables_initializer())
+
+lr = 0.001
+kp = 0.5
+# TODO: Implement function
+for epoch in range(epochs):
+    print("Epoch:", epoch)
+    epoch_loss = 0
+    cnt = 0
+    for image, label in get_batches_fn(batch_size):
+        cnt += len(image)
+        operations = [
+            train_op,
+            cross_entropy_loss
+        ]
+
+        params = {
+            input_image: image,
+            correct_label: label,
+            learning_rate: lr,
+            keep_prob: kp
+        }
+        train_result,loss = sess.run(operations, params)
+        #print("Batch:", cnt,"\t", loss)
+        epoch_loss += loss
+
+    avg_cost = epoch_loss/cnt
+    print("AVG Loss:", avg_cost)
+```
+
+I've tried a few options for the epoch, where with 50 the result was still too imprecise, with 100 there where a good overall result.
+With 200 the result is much more polished and the contour of the area are smooth and continuous (see below). 
+By looking at the output below looks plausible that with more epochs it would be possible to decrease the training loss even further,
+however, by looking at the result on the test images I had the feeling that my network was showing signs of overfitting the training set, 
+but in the absence of a validation test or test labels was hard to have a definitive answer. So I decided to keep the 200 epoch result.
+
+```
 Epoch: 177
 AVG Loss: 0.00133052737707
 Epoch: 178
@@ -85,3 +137,20 @@ Epoch: 199
 AVG Loss: 0.00112396013958
 Save
 Training Finished. Saving test images to: ./runs/1510686717.6477408
+```
+
+#### Results
+
+100 Epochs                         |                         200 Epochs
+:---------------------------------:|:-----------------------------------:
+![](runs/epoch_100/um_000000.png)  |  ![](runs/epoch_200/um_000000.png)
+![](runs/epoch_100/um_000066.png)  |  ![](runs/epoch_200/um_000066.png)
+![](runs/epoch_100/um_000086.png)  |  ![](runs/epoch_200/um_000086.png)
+![](runs/epoch_100/uu_000002.png)  |  ![](runs/epoch_200/uu_000002.png)
+
+#### Conclusions
+
+By observing the results, the model could greatly benefit from the introduction of additional classes, starting from cars and sidewalks, 
+as currently they are causing most of the false positive detections.
+The other major issue appear to be caused by shadows and overexposure, which suggest that data augmentation with contrast, 
+brightness and the introduction of random partial shadowing could increase the overall performance in detection.  
